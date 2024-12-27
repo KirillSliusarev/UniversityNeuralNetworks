@@ -26,6 +26,21 @@ class Tensor(object):
             return Tensor(self.data + other.data, [self, other], "+", True)
         return Tensor(self.data + other.data)
 
+    def __sub__(self, other):
+        if self.autograd and other.autograd:
+            return Tensor(self.data - other.data, [self, other], "-", True)
+        return Tensor(self.data - other.data)
+
+    def __mul__(self, other):
+        if self.autograd and other.autograd:
+            return Tensor(self.data * other.data, [self, other], "*", True)
+        return Tensor(self.data * other.data)
+
+    def __neg__(self):
+        if self.autograd:
+            return Tensor(-self.data, [self], "neg", True)
+        return Tensor(-self.data)
+
     def __str__(self):
         return str(self.data.__str__())
 
@@ -48,8 +63,17 @@ class Tensor(object):
             self.grad += grad
         if self.creators and (self.check_grads_from_children() or grad_origin is None):
             if self.operation_on_creation == "+":
-                self.creators[0].backward(grad)
-                self.creators[1].backward(grad)
+                self.creators[0].backward(grad, self)
+                self.creators[1].backward(grad, self)
+            elif self.operation_on_creation == "-":
+                self.creators[0].backward(grad, self)
+                self.creators[1].backward(-grad, self)
+            elif self.operation_on_creation == "*":
+                new = grad * self.creators[1].data
+                self.creators[1].backward(grad * self.creators[0].data, self)
+                self.creators[0].backward(new, self)
+            elif self.operation_on_creation == "neg":
+                self.creators[0].backward(-grad, self)
 
 # Пример для проверки правильности кода с автоградиентом
 a_1 = Tensor([1, 2, 3], autograd=True)
@@ -57,11 +81,14 @@ a_2 = Tensor([4, 5, 6], autograd=True)
 a_3 = Tensor([7, 8, 9], autograd=True)
 
 a_add_1 = a_1 + a_2
-a_add_2 = a_2 + a_3
-a_add_3 = a_add_1 + a_add_2
+a_sub_1 = a_2 - a_3
+a_mul_1 = a_1 * a_3
+a_neg_1 = -a_2
+
+a_final = a_add_1 + a_sub_1 + a_mul_1 + a_neg_1
 
 # Проверка градиентов
-a_add_3.backward(Tensor([1, 1, 1]))
+a_final.backward(Tensor([1, 1, 1]))
 
 print("a_1.grad:", a_1.grad)
 print("a_2.grad:", a_2.grad)
