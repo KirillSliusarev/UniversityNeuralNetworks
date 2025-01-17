@@ -237,66 +237,34 @@ class MSELoss(Layer):
         return ((prediction - true_prediction) * (prediction - true_prediction)).sum(0)
 
 
-np.random.seed(0)
+class ModelRunner(object):
 
-x = Tensor([
-    [0, 0, 0, 0],  # 0
-    [0, 0, 0, 1],  # 1
-    [0, 0, 1, 0],  # 2
-    [0, 0, 1, 1],  # 3
-    [0, 1, 0, 0],  # 4
-    [0, 1, 0, 1],  # 5
-    [0, 1, 1, 0],  # 6
-    [0, 1, 1, 1],  # 7
-    [1, 0, 0, 0],  # 8
-    [1, 0, 0, 1]  # 9
-], autograd=True)
+    def set_hyperparameters(self, model, learning_rate, num_epoch, loss):
+        self.model = model
+        self.sgd = SGD(self.model.get_parameters(), learning_rate)
+        self.num_epoch = num_epoch
+        self.loss = loss
 
-y = Tensor([
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-], autograd=True)
+    def set_learning_data(self, x, y, autogradtf):
+        self.rawx = x
+        self.rawy = y
+        self.x = Tensor(x, autograd=autogradtf)
+        self.y = Tensor(y, autograd=autogradtf)
 
-model = Sequential([Linear(4, 15), Sigmoid(), Linear(15, 10), Softmax()])
-sgd = SGD(model.get_parameters(), 0.01)
-num_epoch = 10000
+    def run(self):
+        for i in range(self.num_epoch):
+            self.predictions = self.model.forward(self.x)
+            self.error = self.loss.forward(self.predictions, self.y)
+            self.error.backward(Tensor(np.ones_like(self.error.data)))
+            self.sgd.step()
+            if self.num_epoch % 1000 == 0:
+                print(f"Epoch: {self.num_epoch}, Error: {self.error}")
 
-loss = MSELoss()
-for i in range(num_epoch):
-    predictions = model.forward(x)
-    error = loss.forward(predictions, y)
-    error.backward(Tensor(np.ones_like(error.data)))
-    sgd.step()
-    if num_epoch % 1000 == 0:
-        print(f"Epoch: {num_epoch}, Error: {error}")
+    def predict(self, inp):
+        self.output_layer = self.model.forward(inp)
+        return np.argmax(self.output_layer.data)
 
-
-def predict(inp):
-    output_layer = model.forward(inp)
-    return np.argmax(output_layer.data)
-
-
-x = ([
-    [0, 0, 0, 0],  # 0
-    [0, 0, 0, 1],  # 1
-    [0, 0, 1, 0],  # 2
-    [0, 0, 1, 1],  # 3
-    [0, 1, 0, 0],  # 4
-    [0, 1, 0, 1],  # 5
-    [0, 1, 1, 0],  # 6
-    [0, 1, 1, 1],  # 7
-    [1, 0, 0, 0],  # 8
-    [1, 0, 0, 1]  # 9
-])
-
-for inp in x:
-    print("------------------------------------")
-    print(f"Предсказанная цифра для {inp}:", predict(Tensor([inp])))
+    def ShowResult(self, test_data):
+        for inp in test_data:
+            print("------------------------------------")
+            print(f"предикшн для {inp}:", self.predict(Tensor([inp])))
