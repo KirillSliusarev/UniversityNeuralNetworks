@@ -149,7 +149,7 @@ class Tensor(object):
             return Tensor(np.tanh(self.data))
 
     def softmax(self):
-        exp = np.exp(self.data)
+        exp = np.exp(self.data - np.max(self.data, axis=1, keepdims=True))
         exp = exp / np.sum(exp, axis=1, keepdims=True)
         if self.autograd:
             return Tensor(exp, [self], "softmax", True)
@@ -187,6 +187,8 @@ class Layer(object):
 class Linear(Layer):
     def __init__(self, input_count, output_count):
         super().__init__()
+        self.inp = input_count
+        self.out = output_count
         weight = np.random.randn(input_count, output_count) * np.sqrt(2.0 / input_count)
         self.weight = Tensor(weight, autograd=True)
         self.bias = Tensor(np.zeros(output_count), autograd=True)
@@ -195,6 +197,9 @@ class Linear(Layer):
 
     def forward(self, inp):
         return inp.dot(self.weight) + self.bias.expand(0, len(inp.data))
+
+    def __repr__(self):
+        return f"Linear({self.inp}, {self.out})"
 
 
 class Sequential(Layer):
@@ -215,21 +220,30 @@ class Sequential(Layer):
         for layer in self.layers:
             params += layer.get_parameters()
         return params
+    def __repr__(self):
+        return f"Sequential({self.layers})"
 
 
 class Sigmoid(Layer):
     def forward(self, inp):
         return inp.sigmoid()
+    def __repr__(self):
+        return "Sigmoid()"
+
 
 
 class Tanh(Layer):
     def forward(self, inp):
         return inp.tanh()
+    def __repr__(self):
+        return "Tanh()"
 
 
 class Softmax(Layer):
     def forward(self, inp):
         return inp.softmax()
+    def __repr__(self):
+        return "Softmax()"
 
 
 class MSELoss(Layer):
@@ -239,26 +253,74 @@ class MSELoss(Layer):
 
 class ModelRunner(object):
 
-    def set_hyperparameters(self, model, learning_rate, num_epoch, loss):
-        self.model = model
+    def set_model(self, input_size, output_size, num_layers, num_neurons):
+        self.layers = []
+        for i in range(num_layers):
+            self.layers.append(Linear(input_size if i == 0 else num_neurons, num_neurons))
+            self.layers.append(Sigmoid())
+        self.layers.append(Linear(num_neurons, output_size))
+        self.layers.append(Softmax())
+        self.model = Sequential(self.layers)
+
+    def set_hyperparameters(self, learning_rate=0.01, num_epoch=100, loss=MSELoss()):
         self.sgd = SGD(self.model.get_parameters(), learning_rate)
         self.num_epoch = num_epoch
         self.loss = loss
 
-    def set_learning_data(self, x, y, autogradtf):
+    def set_train_data(self, x, y, autogradtf=True):
         self.rawx = x
         self.rawy = y
-        self.x = Tensor(x, autograd=autogradtf)
-        self.y = Tensor(y, autograd=autogradtf)
+        self.train_x = Tensor(x, autograd=autogradtf)
+        self.train_y = Tensor(y, autograd=autogradtf)
 
-    def run(self):
+    def train(self, epoch_to_show=10):
+        if epoch_to_show > self.num_epoch:
+            epoch_to_show = self.num_epoch
         for i in range(self.num_epoch):
-            self.predictions = self.model.forward(self.x)
-            self.error = self.loss.forward(self.predictions, self.y)
+            self.predictions = self.model.forward(self.train_x)
+            self.error = self.loss.forward(self.predictions, self.train_y)
             self.error.backward(Tensor(np.ones_like(self.error.data)))
             self.sgd.step()
-            if self.num_epoch % 1000 == 0:
-                print(f"Epoch: {self.num_epoch}, Error: {self.error}")
+            if i % (self.num_epoch / epoch_to_show) == 0 and epoch_to_show != 1:
+                print(f"Epoch: {i}/{self.num_epoch}, Error: {self.error}")
+                print(f"Predictions: {self.predictions.data}")
+                print(f"Gradients: {self.model.get_parameters()[0].grad.data}")
+
+    def grid_search_hyperparameters(self, x_train, y_train, x_val, y_val, input_size, output_size, param_grid, num_epochs=100):
+        _best_error = float('inf')
+        _best_params = None
+
+        for num_layers in param_grid['num_layers']:
+            for num_neurons in param_grid['num_neurons']:
+                for learning_rate in param_grid['learning_rate']:
+                    self.set_model(input_size, output_size, num_layers, num_neurons)
+                    self.set_hyperparameters(learning_rate=learning_rate, num_epoch=num_epochs)
+                    self.set_train_data(x_train, y_train)
+                    self.train(1)
+                    _error = self.evaluate(x_val, y_val)
+
+
+                    if _error < _best_error:
+                        _best_error = _error
+                        _best_params = (num_layers, num_neurons, learning_rate)
+
+        self.best_params = _best_params
+        self.best_error = _best_error
+
+    def set_best_hparams(self,input_size, output_size, num_epoch=1000, loss=MSELoss()):
+        if self.best_params:
+            self.set_model(input_size,output_size,self.best_params[0],self.best_params[1])
+            self.set_hyperparameters(learning_rate=self.best_params[2], num_epoch=num_epoch, loss=loss)
+        else: print("There is no best hyperparameters")
+
+    def predictall(self, x_val):
+        self.output_layer = self.model.forward(x_val)
+        return self.output_layer.data
+
+    def evaluate(self, x_val, y_val):
+        self.val_prediction = self.model.forward(Tensor(x_val))
+        self.val_loss = self.loss.forward(self.val_prediction, Tensor(y_val))
+        return self.val_loss.data.mean()
 
     def predict(self, inp):
         self.output_layer = self.model.forward(inp)

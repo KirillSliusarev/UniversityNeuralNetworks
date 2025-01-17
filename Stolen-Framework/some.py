@@ -14,7 +14,7 @@ x = [
     [1, 0, 0, 0],  # 8
     [1, 0, 0, 1]  # 9
 ]
-
+x = np.array(x)
 y = [
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     [0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -27,16 +27,19 @@ y = [
     [0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
 ]
-
+y = np.array(y)
+hyperparameter_space = {
+    'learning_rate': [0.00001, 0.0001, 0.001, 0.01, 0.1],
+    'num_layers': [1, 2, 3, 4, 5],
+    'num_neurons': [5, 10, 15, 20, 25, 30]
+}
 
 
 somemodel = ModelRunner()
-
-somemodel.set_hyperparameters(Sequential([Linear(4, 15), Sigmoid(), Linear(15, 10), Softmax()]), 0.01, 10000, MSELoss())
-somemodel.set_learning_data(x, y, True)
-
-somemodel.run()
-
+somemodel.grid_search_hyperparameters(x,y,x,y,4,10,hyperparameter_space,100)
+somemodel.set_best_hparams(4,10,10000)
+somemodel.set_train_data(x, y)
+somemodel.train()
 somemodel.ShowResult(x)
 
 exit()
