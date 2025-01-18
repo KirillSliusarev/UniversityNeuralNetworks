@@ -1,4 +1,5 @@
 from Framework import *
+import time
 
 np.random.seed(0)
 
@@ -31,7 +32,9 @@ y = np.array(y)
 hyperparameter_space = {
     'learning_rate': [0.00001, 0.0001, 0.001, 0.01, 0.1],
     'num_layers': [1, 2, 3, 4, 5],
-    'num_neurons': [5, 10, 15, 20, 25, 30]
+    'num_neurons': [5, 10, 15, 20, 25, 30],
+    'act_func': [Sigmoid(), Tanh(), Softmax()],
+    'last_func': [Sigmoid(), Tanh(), Softmax()]
 }
 
 
@@ -41,6 +44,18 @@ somemodel.set_best_hparams(4,10,10000)
 somemodel.set_train_data(x, y)
 somemodel.train()
 somemodel.ShowResult(x)
+print(somemodel.evaluate(x,y))
+print(somemodel.model)
+print(somemodel.best_params, somemodel.best_error)
+somemodel.set_model(x.shape[1],y.shape[1], 2, 15, last_func=Softmax())
+somemodel.set_hyperparameters(num_epoch=10000)
+somemodel.set_train_data(x,y)
+time.sleep(30)
+somemodel.train()
+print(somemodel.evaluate(x,y))
+print(somemodel.model)
+print(somemodel.best_params, somemodel.best_error)
+
 
 exit()
 

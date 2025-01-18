@@ -149,7 +149,8 @@ class Tensor(object):
             return Tensor(np.tanh(self.data))
 
     def softmax(self):
-        exp = np.exp(self.data - np.max(self.data, axis=1, keepdims=True))
+        max_val = np.max(self.data, axis=1, keepdims=True)
+        exp = np.exp(self.data - max_val)
         exp = exp / np.sum(exp, axis=1, keepdims=True)
         if self.autograd:
             return Tensor(exp, [self], "softmax", True)
@@ -252,14 +253,23 @@ class MSELoss(Layer):
 
 
 class ModelRunner(object):
+    def __init__(self):
+        self.default_hparams = {
+        'learning_rate': [0.00001, 0.0001, 0.001, 0.01, 0.1],
+        'num_layers': [1, 2, 3, 4, 5],
+        'num_neurons': [5, 10, 15, 20, 25, 30],
+        'act_func': [Sigmoid(), Tanh(), Softmax()],
+        'last_func': [Sigmoid(), Tanh(), Softmax()]
+        }
+        self.best_params = None
 
-    def set_model(self, input_size, output_size, num_layers, num_neurons):
+    def set_model(self, input_size, output_size, num_layers, num_neurons, act_func=Sigmoid(), last_func=Sigmoid()):
         self.layers = []
         for i in range(num_layers):
             self.layers.append(Linear(input_size if i == 0 else num_neurons, num_neurons))
-            self.layers.append(Sigmoid())
+            self.layers.append(act_func)
         self.layers.append(Linear(num_neurons, output_size))
-        self.layers.append(Softmax())
+        self.layers.append(last_func)
         self.model = Sequential(self.layers)
 
     def set_hyperparameters(self, learning_rate=0.01, num_epoch=100, loss=MSELoss()):
@@ -283,8 +293,6 @@ class ModelRunner(object):
             self.sgd.step()
             if i % (self.num_epoch / epoch_to_show) == 0 and epoch_to_show != 1:
                 print(f"Epoch: {i}/{self.num_epoch}, Error: {self.error}")
-                print(f"Predictions: {self.predictions.data}")
-                print(f"Gradients: {self.model.get_parameters()[0].grad.data}")
 
     def grid_search_hyperparameters(self, x_train, y_train, x_val, y_val, input_size, output_size, param_grid, num_epochs=100):
         _best_error = float('inf')
@@ -293,23 +301,26 @@ class ModelRunner(object):
         for num_layers in param_grid['num_layers']:
             for num_neurons in param_grid['num_neurons']:
                 for learning_rate in param_grid['learning_rate']:
-                    self.set_model(input_size, output_size, num_layers, num_neurons)
-                    self.set_hyperparameters(learning_rate=learning_rate, num_epoch=num_epochs)
-                    self.set_train_data(x_train, y_train)
-                    self.train(1)
-                    _error = self.evaluate(x_val, y_val)
+                    for act_func in param_grid['act_func']:
+                        for last_func in param_grid['last_func']:
+                            self.set_model(input_size, output_size, num_layers, num_neurons, act_func, last_func)
+                            self.set_hyperparameters(learning_rate=learning_rate, num_epoch=num_epochs)
+                            self.set_train_data(x_train, y_train)
+                            print(self.model)
+                            self.train()
+                            _error = self.evaluate(x_val, y_val)[0]
 
 
-                    if _error < _best_error:
-                        _best_error = _error
-                        _best_params = (num_layers, num_neurons, learning_rate)
+                            if _error < _best_error:
+                                _best_error = _error
+                                _best_params = (num_layers, num_neurons, learning_rate, act_func, last_func)
 
         self.best_params = _best_params
         self.best_error = _best_error
 
     def set_best_hparams(self,input_size, output_size, num_epoch=1000, loss=MSELoss()):
         if self.best_params:
-            self.set_model(input_size,output_size,self.best_params[0],self.best_params[1])
+            self.set_model(input_size,output_size,self.best_params[0],self.best_params[1], self.best_params[3], self.best_params[4])
             self.set_hyperparameters(learning_rate=self.best_params[2], num_epoch=num_epoch, loss=loss)
         else: print("There is no best hyperparameters")
 
@@ -319,12 +330,12 @@ class ModelRunner(object):
 
     def evaluate(self, x_val, y_val):
         self.val_prediction = self.model.forward(Tensor(x_val))
-        self.val_loss = self.loss.forward(self.val_prediction, Tensor(y_val))
-        return self.val_loss.data.mean()
+        self.val_loss = self.loss.forward(self.predictions, Tensor(y_val))
+        return self.val_loss.data
 
     def predict(self, inp):
         self.output_layer = self.model.forward(inp)
-        return np.argmax(self.output_layer.data)
+        return self.output_layer.data
 
     def ShowResult(self, test_data):
         for inp in test_data:

@@ -1,28 +1,70 @@
 from Framework import *
 
-# Определяем входные данные и целевые значения для XOR
-x_train = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-y_train = np.array([[0], [1], [1], [0]])
+np.random.seed(0)
 
-# Создаем экземпляр ModelRunner
-model_runner = ModelRunner()
+x_train = np.array([
+    [58, 160],  # Female
+    [60, 165],  # Female
+    [80, 180],  # Male
+    [75, 175],  # Male
+    [50, 155],  # Female
+    [90, 185],  # Male
+    [70, 170],  # Male
+    [40, 150],  # Female
+    [65, 168],  # Female
+    [85, 182] # Male
+])
+y_train = np.array([
+    [0],  # Female
+    [0],  # Female
+    [1],  # Male
+    [1],  # Male
+    [0],  # Female
+    [1],  # Male
+    [1],  # Male
+    [0],  # Female
+    [0],  # Female
+    [1]  # Male
+])
 
-# Устанавливаем модель с одним скрытым слоем и двумя нейронами
-model_runner.set_model(input_size=2, output_size=1, num_layers=1, num_neurons=2)
+x_val = np.array([
+    [58, 160],  # Female
+    [60, 165],  # Female
+    [80, 180],  # Male
+    [75, 175],  # Male
+    [50, 155],  # Female
+    [90, 185],  # Male
+    [70, 170],  # Male
+    [40, 150],  # Female
+    [65, 168],  # Female
+    [85, 182]  # Male
+])
+y_val = np.array([
+    [0],  # Female
+    [0],  # Female
+    [1],  # Male
+    [1],  # Male
+    [0],  # Female
+    [1],  # Male
+    [1],  # Male
+    [0],  # Female
+    [0],  # Female
+    [1]  # Male
+])
 
-# Устанавливаем гиперпараметры
-model_runner.set_hyperparameters(learning_rate=0.1, num_epoch=10000)
 
-# Устанавливаем тренировочные данные
-model_runner.set_train_data(x_train, y_train)
 
-# Обучаем модель
-model_runner.train(epoch_to_show=1000)
 
-# Проверяем результаты на тренировочных данных
-print("Training results:")
-model_runner.ShowResult(x_train)
 
-# Проверяем результаты на тестовых данных (в данном случае они совпадают с тренировочными)
-print("Test results:")
-model_runner.ShowResult(x_train)
+somemodel = ModelRunner()
+somemodel.grid_search_hyperparameters(x_train, y_train, x_val, y_val, x_train.shape[1], y_train.shape[1], somemodel.default_hparams, 100)
+somemodel.set_best_hparams(x_train.shape[1],y_train.shape[1],100)
+somemodel.set_train_data(x_train, y_train)
+somemodel.train()
+somemodel.ShowResult(x_val)
+print(somemodel.evaluate(x_val, y_val))
+print(somemodel.model)
+print(somemodel.best_params, somemodel.best_error)
+
+exit()
+
